@@ -1,10 +1,16 @@
 package com.method.onnxTest.exceptions;
 
 import ai.onnxruntime.OrtException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
@@ -56,40 +62,62 @@ public class GlobalExceptionsHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
-    public static class ErrorResponse {
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleMessageNotReadableException(
+        HttpMessageNotReadableException ex
+    ) {
+        logger.warn("Invalid Request Provided: ", ex);
+        ErrorResponse errorResponse = new ErrorResponse(
+            "INVALID_REQUEST",
+            ex.getMessage(),
+            System.currentTimeMillis()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
 
-        private String errorCode;
-        private String message;
-        private long timestamp;
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleMessageNotReadableException(
+        MethodArgumentNotValidException ex
+    ) {
+        logger.warn(
+            "MethodArgumentNotValidException: Invalid Request Provided"
+        );
 
+        // Collect all validation errors
+        List<String> errors = ex
+            .getBindingResult()
+            .getFieldErrors()
+            .stream()
+            .map(fieldError -> fieldError.getDefaultMessage())
+            .collect(Collectors.toList());
+
+        logger.info("Errors: " + errors);
+
+        ErrorResponse errorResponse = new ErrorResponse(
+            "INVALID_REQUEST",
+            System.currentTimeMillis(),
+            errors
+        );
+
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    public static record ErrorResponse(
+        String errorCode,
+        String message,
+        long timestamp,
+        List<String> errors
+    ) {
         public ErrorResponse(String errorCode, String message, long timestamp) {
-            this.errorCode = errorCode;
-            this.message = message;
-            this.timestamp = timestamp;
+            this(errorCode, message, timestamp, null);
         }
 
-        public String getErrorCode() {
-            return errorCode;
-        }
-
-        public void setErrorCode(String errorCode) {
-            this.errorCode = errorCode;
-        }
-
-        public String getMessage() {
-            return message;
-        }
-
-        public void setMessage(String message) {
-            this.message = message;
-        }
-
-        public long getTimestamp() {
-            return timestamp;
-        }
-
-        public void setTimestamp(long timestamp) {
-            this.timestamp = timestamp;
+        public ErrorResponse(
+            String errorCode,
+            long timestamp,
+            List<String> errors
+        ) {
+            this(errorCode, null, timestamp, errors);
         }
     }
 }
